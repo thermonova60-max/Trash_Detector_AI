@@ -1,0 +1,15 @@
+.env
+.env.local
+node_modules/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/settings.json
+dist/
+build/
+*.log
+ollama-data/
+.pytest_cache/
+.coverage
+htmlcov/

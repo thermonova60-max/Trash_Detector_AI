@@ -1,0 +1,276 @@
+.dashboard {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-container {
+  width: 100%;
+  max-width: 1200px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 60px 40px;
+  text-align: center;
+}
+
+.header-content h1 {
+  font-size: 48px;
+  margin: 0 0 10px 0;
+  font-weight: bold;
+}
+
+.header-content .subtitle {
+  font-size: 20px;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.status-card {
+  margin: 40px;
+  padding: 30px;
+  background: #f8f9fa;
+  border-radius: 15px;
+  border: 2px solid #667eea;
+}
+
+.card-title {
+  font-size: 24px;
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.status-value {
+  font-size: 18px;
+  color: #333;
+  font-weight: bold;
+}
+
+.status-value.active {
+  color: #2ecc71;
+}
+
+.features {
+  padding: 40px;
+  border-top: 1px solid #eee;
+}
+
+.features h2 {
+  font-size: 32px;
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.feature {
+  padding: 25px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #eee;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.feature:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.feature-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.feature h3 {
+  font-size: 18px;
+  color: #333;
+  margin: 15px 0;
+}
+
+.feature p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.categories {
+  padding: 40px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+}
+
+.categories h2 {
+  font-size: 32px;
+  color: #333;
+  margin-top: 0;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 15px;
+}
+
+.category {
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
+  border-left: 4px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.category:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.category-icon {
+  font-size: 32px;
+}
+
+.category-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.cta-section {
+  padding: 40px;
+  text-align: center;
+  background: white;
+  border-top: 1px solid #eee;
+}
+
+.cta-button {
+  padding: 18px 50px;
+  font-size: 18px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+}
+
+.cta-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+}
+
+.footer {
+  padding: 20px;
+  text-align: center;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+  font-size: 14px;
+  color: #666;
+}
+
+.back-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  padding: 12px 20px;
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.back-btn:hover {
+  background: #667eea;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 40px 20px;
+  }
+
+  .header-content h1 {
+    font-size: 32px;
+  }
+
+  .header-content .subtitle {
+    font-size: 16px;
+  }
+
+  .status-card,
+  .features,
+  .categories,
+  .cta-section {
+    padding: 20px;
+  }
+
+  .features h2,
+  .categories h2 {
+    font-size: 24px;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .categories-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .cta-button {
+    padding: 15px 30px;
+    font-size: 16px;
+  }
+}
