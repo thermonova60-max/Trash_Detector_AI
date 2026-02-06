@@ -3,15 +3,24 @@ import json
 import requests
 import base64
 import cgi
+from io import BytesIO
 
 PORT = 8000
-OLLAMA_MODEL = "qwen3-vl:235b-cloud"
+OLLAMA_MODEL = "gemma3:4b-cloud"  # Cloud model
 OLLAMA_HOST = "http://localhost:11434"
+MAX_IMAGE_SIZE = 512  # Resize images for speed
 
 CATEGORY_COLORS = {
-    "Wet": "#2ecc71", "Dry": "#3498db", "Plastic": "#f1c40f",
-    "Metal": "#95a5a6", "Glass": "#1abc9c", "E-Waste": "#9b59b6",
-    "Hazardous": "#e74c3c", "Unknown": "#7f8c8d"
+    "Wet": "linear-gradient(135deg, #059669 0%, #047857 100%)",
+    "Dry": "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+    "Plastic": "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    "Metal": "linear-gradient(135deg, #6b7280 0%, #374151 100%)",
+    "Glass": "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
+    "E-Waste": "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+    "Hazardous": "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+    "Biowaste": "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)",
+    "Sprays": "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+    "Unknown": "linear-gradient(135deg, #6b7280 0%, #1f2937 100%)"
 }
 
 HTML_PAGE = """<!DOCTYPE html>
@@ -22,130 +31,193 @@ HTML_PAGE = """<!DOCTYPE html>
     <title>TrashCollector AI</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #16a34a;
+            --secondary: #22c55e;
+            --accent: #4ade80;
+        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
             min-height: 100vh;
             padding: 20px;
+            transition: background 0.6s ease;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 50%, rgba(22, 163, 74, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(34, 197, 94, 0.15) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
         }
         .container {
-            max-width: 800px;
+            max-width: 850px;
             margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, rgba(5, 46, 22, 0.85) 0%, rgba(6, 78, 59, 0.9) 100%);
+            border-radius: 25px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1) inset;
             overflow: hidden;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+            backdrop-filter: blur(10px);
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
             color: white;
-            padding: 40px;
+            padding: 50px 40px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
-        .header h1 { font-size: 36px; margin-bottom: 10px; }
-        .header p { opacity: 0.9; font-size: 16px; }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+        .header h1 { font-size: 42px; margin-bottom: 10px; font-weight: 800; letter-spacing: -1px; position: relative; z-index: 1; }
+        .header p { opacity: 0.95; font-size: 16px; font-weight: 300; position: relative; z-index: 1; }
         .status-bar {
-            background: #f8f9fa;
-            padding: 15px 30px;
+            background: linear-gradient(90deg, rgba(22, 163, 74, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
+            padding: 20px 30px;
             display: flex;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 10px;
-            border-bottom: 1px solid #eee;
+            gap: 15px;
+            border-bottom: 1px solid rgba(74, 222, 128, 0.2);
             font-size: 14px;
         }
-        .status-item { display: flex; gap: 8px; }
-        .status-label { color: #666; }
-        .status-value { font-weight: bold; color: #333; }
-        .status-active { color: #2ecc71; }
-        .content { padding: 40px; }
+        .status-item { display: flex; gap: 10px; align-items: center; }
+        .status-label { color: #86efac; font-weight: 500; }
+        .status-value { font-weight: 700; color: #dcfce7; }
+        .status-active { color: #10b981; font-weight: 800; }
+        .content { padding: 50px 40px; }
         .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 15px;
-            padding: 60px 40px;
+            border: 2px dashed #16a34a;
+            border-radius: 20px;
+            padding: 70px 40px;
             text-align: center;
-            background: #f8f9ff;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .upload-area:hover { background: #eef1ff; border-color: #764ba2; }
-        .upload-icon { font-size: 64px; margin-bottom: 20px; }
-        .upload-text { font-size: 18px; color: #333; margin-bottom: 10px; }
-        .upload-hint { font-size: 14px; color: #666; }
+        .upload-area:hover {
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%);
+            border-color: #22c55e;
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(22, 163, 74, 0.3);
+        }
+        .upload-icon { font-size: 70px; margin-bottom: 20px; display: block; }
+        .upload-text { font-size: 20px; color: #dcfce7; margin-bottom: 10px; font-weight: 600; }
+        .upload-hint { font-size: 14px; color: #86efac; }
         #fileInput { display: none; }
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
             color: white;
             border: none;
-            padding: 15px 40px;
+            padding: 16px 50px;
             font-size: 16px;
-            font-weight: bold;
+            font-weight: 700;
             border-radius: 50px;
             cursor: pointer;
-            margin-top: 20px;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(102,126,234,0.4); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .preview { margin-top: 30px; text-align: center; }
-        .preview img { max-width: 300px; max-height: 300px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }
-        .result {
             margin-top: 30px;
-            padding: 30px;
-            background: #f8f9fa;
-            border-radius: 15px;
-            display: none;
+            transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(22, 163, 74, 0.4);
         }
-        .result.show { display: block; animation: fadeIn 0.5s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .result-header { font-size: 14px; color: #666; text-transform: uppercase; margin-bottom: 10px; }
-        .result-object { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 20px; }
+        .btn:hover:not(:disabled) { 
+            transform: translateY(-3px);
+            box-shadow: 0 15px 50px rgba(22, 163, 74, 0.6);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .preview { margin-top: 40px; text-align: center; }
+        .preview img { max-width: 320px; max-height: 320px; border-radius: 20px; box-shadow: 0 20px 50px rgba(22, 163, 74, 0.4); }
+        .result {
+            margin-top: 40px;
+            padding: 40px;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
+            border-radius: 20px;
+            display: none;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+        .result.show { display: block; animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .result-header { font-size: 12px; color: #86efac; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700; }
+        .result-object { font-size: 28px; font-weight: 800; color: #f0fdf4; margin-bottom: 25px; }
         .result-category {
             display: inline-block;
-            padding: 15px 30px;
+            padding: 18px 40px;
             border-radius: 50px;
             color: white;
             font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 20px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
         }
+        .result-category:hover { transform: scale(1.05); }
         .result-instruction {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
+            background: rgba(5, 46, 22, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #16a34a;
             font-size: 16px;
-            color: #333;
+            color: #dcfce7;
+            line-height: 1.6;
         }
         .categories {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 10px;
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 1px solid #eee;
+            grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+            gap: 15px;
+            margin-top: 40px;
+            padding-top: 40px;
+            border-top: 1px solid rgba(74, 222, 128, 0.2);
         }
         .category {
-            padding: 15px 10px;
-            border-radius: 10px;
+            padding: 20px 15px;
+            border-radius: 15px;
             text-align: center;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             color: white;
+            transition: all 0.3s;
+            cursor: default;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
-        .loading { display: none; text-align: center; padding: 40px; }
+        .category:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4); }
+        .loading { display: none; text-align: center; padding: 50px 40px; }
         .loading.show { display: block; }
         .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 60px; height: 60px;
+            border: 4px solid rgba(22, 163, 74, 0.2);
+            border-top: 4px solid #16a34a;
+            border-right: 4px solid #22c55e;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
             margin: 0 auto 20px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .error { color: #e74c3c; background: #fdf0f0; padding: 15px; border-radius: 10px; margin-top: 20px; display: none; }
-        .error.show { display: block; }
+        .loading p { color: #dcfce7; font-weight: 600; }
+        .error { 
+            color: #fca5a5;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+            padding: 18px;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+            border-left: 4px solid #ef4444;
+            font-weight: 600;
+        }
+        .error.show { display: block; animation: slideUp 0.4s; }
     </style>
 </head>
 <body>
@@ -158,7 +230,7 @@ HTML_PAGE = """<!DOCTYPE html>
         <div class="status-bar">
             <div class="status-item">
                 <span class="status-label">Model:</span>
-                <span class="status-value">qwen3-vl:235b-cloud</span>
+                <span class="status-value">gemma3:4b-cloud</span>
             </div>
             <div class="status-item">
                 <span class="status-label">Status:</span>
@@ -197,19 +269,34 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
             
             <div class="categories">
-                <div class="category" style="background:#2ecc71">Wet</div>
-                <div class="category" style="background:#3498db">Dry</div>
-                <div class="category" style="background:#f1c40f;color:#333">Plastic</div>
-                <div class="category" style="background:#95a5a6">Metal</div>
-                <div class="category" style="background:#1abc9c">Glass</div>
-                <div class="category" style="background:#9b59b6">E-Waste</div>
-                <div class="category" style="background:#e74c3c">Hazardous</div>
-                <div class="category" style="background:#7f8c8d">Unknown</div>
+                <div class="category" style="background: linear-gradient(135deg, #059669 0%, #047857 100%)">🟢 Wet</div>
+                <div class="category" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)">🔵 Dry</div>
+                <div class="category" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%)">🟡 Plastic</div>
+                <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #374151 100%)">⚪ Metal</div>
+                <div class="category" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)">🔷 Glass</div>
+                <div class="category" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)">🟣 E-Waste</div>
+                <div class="category" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%)">🔴 Hazard</div>
+                <div class="category" style="background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%)">🌱 Bio</div>
+                <div class="category" style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)">💨 Sprays</div>
+                <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #1f2937 100%)">⚫ Unknown</div>
             </div>
         </div>
     </div>
     
     <script>
+        const categoryBgMap = {
+            "Wet": "linear-gradient(135deg, #059669 0%, #047857 100%)",
+            "Dry": "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+            "Plastic": "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+            "Metal": "linear-gradient(135deg, #6b7280 0%, #374151 100%)",
+            "Glass": "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
+            "E-Waste": "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+            "Hazardous": "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+            "Biowaste": "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)",
+            "Sprays": "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+            "Unknown": "linear-gradient(135deg, #6b7280 0%, #1f2937 100%)"
+        };
+
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const preview = document.getElementById('preview');
@@ -259,6 +346,10 @@ HTML_PAGE = """<!DOCTYPE html>
                     document.getElementById('resultCategory').style.background = data.color;
                     document.getElementById('resultInstruction').textContent = data.instruction;
                     result.classList.add('show');
+                    
+                    // Change background gradient based on category
+                    const bgGradient = categoryBgMap[data.category] || categoryBgMap["Unknown"];
+                    document.body.style.background = bgGradient;
                 } else {
                     showError(data.error || 'Classification failed');
                 }
@@ -279,12 +370,22 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>"""
 
 
-def classify_image(image_base64):
-    prompt = """Analyze this image and identify the waste item. Classify it into ONE category:
-Wet, Dry, Plastic, Metal, Glass, E-Waste, Hazardous, or Unknown.
+def resize_image(image_data, max_size=MAX_IMAGE_SIZE):
+    """Resize image for faster processing"""
+    try:
+        from PIL import Image
+        img = Image.open(BytesIO(image_data))
+        img.thumbnail((max_size, max_size))
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=85)
+        return output.getvalue()
+    except:
+        return image_data  # Return original if resize fails
 
-Respond ONLY in this JSON format:
-{"object": "item name", "category": "Category", "instruction": "how to dispose"}"""
+
+def classify_image(image_base64):
+    prompt = """Identify item and classify: Wet, Dry, Plastic, Metal, Glass, E-Waste, Hazardous, Unknown.
+JSON only: {"object": "name", "category": "Cat", "instruction": "dispose"}"""
 
     try:
         resp = requests.post(
@@ -346,6 +447,7 @@ class Handler(BaseHTTPRequestHandler):
                     )
                     file_item = form["file"]
                     image_data = file_item.file.read()
+                    image_data = resize_image(image_data)  # Compress for speed
                     image_base64 = base64.b64encode(image_data).decode("utf-8")
                     
                     result = classify_image(image_base64)
