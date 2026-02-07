@@ -218,6 +218,71 @@ HTML_PAGE = """<!DOCTYPE html>
             font-weight: 600;
         }
         .error.show { display: block; animation: slideUp 0.4s; }
+        .detected-categories {
+            margin-top: 40px;
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
+            border-radius: 20px;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            display: none;
+        }
+        .detected-categories.show { display: block; animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .detected-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #dcfce7;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .detected-items-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 18px;
+        }
+        .detected-item {
+            background: rgba(5, 46, 22, 0.7);
+            border: 2px solid rgba(74, 222, 128, 0.3);
+            border-radius: 15px;
+            padding: 20px 15px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: default;
+            position: relative;
+            overflow: hidden;
+        }
+        .detected-item:hover {
+            border-color: rgba(74, 222, 128, 0.8);
+            background: rgba(5, 46, 22, 0.95);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(22, 163, 74, 0.2);
+        }
+        .detected-item.found {
+            border: 2px solid #16a34a;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%);
+            box-shadow: 0 0 20px rgba(22, 163, 74, 0.4);
+        }
+        .detected-item-name {
+            font-size: 13px;
+            color: #dcfce7;
+            margin-bottom: 12px;
+            font-weight: 600;
+            display: block;
+        }
+        .detected-item-count {
+            font-size: 20px;
+            font-weight: 800;
+            color: #16a34a;
+            background: rgba(22, 163, 74, 0.3);
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            border: 2px solid #16a34a;
+        }
     </style>
 </head>
 <body>
@@ -259,6 +324,8 @@ HTML_PAGE = """<!DOCTYPE html>
             
             <div class="error" id="error"></div>
             
+            <div id="classifyContainer"></div>
+            
             <div class="result" id="result">
                 <div class="result-header">Object Identified</div>
                 <div class="result-object" id="resultObject">-</div>
@@ -266,6 +333,11 @@ HTML_PAGE = """<!DOCTYPE html>
                 <div class="result-category" id="resultCategory">-</div>
                 <div class="result-header">Disposal Instructions</div>
                 <div class="result-instruction" id="resultInstruction">-</div>
+            </div>
+            
+            <div class="detected-categories" id="detectedCategories">
+                <div class="detected-title">Detected Items</div>
+                <div class="detected-items-grid" id="detectedItemsGrid"></div>
             </div>
             
             <div class="categories">
@@ -304,6 +376,8 @@ HTML_PAGE = """<!DOCTYPE html>
         const loading = document.getElementById('loading');
         const error = document.getElementById('error');
         const result = document.getElementById('result');
+        const detectedCategories = document.getElementById('detectedCategories');
+        const detectedItemsGrid = document.getElementById('detectedItemsGrid');
         
         let selectedFile = null;
         
@@ -330,6 +404,7 @@ HTML_PAGE = """<!DOCTYPE html>
             
             loading.classList.add('show');
             result.classList.remove('show');
+            detectedCategories.classList.remove('show');
             error.classList.remove('show');
             classifyBtn.disabled = true;
             
@@ -346,6 +421,18 @@ HTML_PAGE = """<!DOCTYPE html>
                     document.getElementById('resultCategory').style.background = data.color;
                     document.getElementById('resultInstruction').textContent = data.instruction;
                     result.classList.add('show');
+                    
+                    // Display detected items
+                    if (data.items && data.items.length > 0) {
+                        detectedItemsGrid.innerHTML = '';
+                        data.items.forEach(item => {
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'detected-item' + (item.count > 0 ? ' found' : '');
+                            itemDiv.innerHTML = '<span class="detected-item-name">' + item.name + '</span><div class="detected-item-count">' + item.count + '</div>';
+                            detectedItemsGrid.appendChild(itemDiv);
+                        });
+                        detectedCategories.classList.add('show');
+                    }
                     
                     // Change background gradient based on category
                     const bgGradient = categoryBgMap[data.category] || categoryBgMap["Unknown"];
@@ -384,8 +471,11 @@ def resize_image(image_data, max_size=MAX_IMAGE_SIZE):
 
 
 def classify_image(image_base64):
-    prompt = """Identify item and classify: Wet, Dry, Plastic, Metal, Glass, E-Waste, Hazardous, Unknown.
-JSON only: {"object": "name", "category": "Cat", "instruction": "dispose"}"""
+    prompt = """Identify the main item and classify it: Wet, Dry, Plastic, Metal, Glass, E-Waste, Hazardous, Biowaste, Sprays, Unknown.
+    Also detect if these e-waste items are present (1 if yes, 0 if no):
+    mobile, laptop, tablet, battery, charger, wire, circuit_board, motherboard, hard_disk, keyboard, mouse, monitor, cpu, power_supply, other
+    
+JSON only: {"object": "main item name", "category": "Category", "instruction": "disposal instructions", "items": [{"name": "item", "count": 0/1}, ...]}""" 
 
     try:
         resp = requests.post(
@@ -409,12 +499,20 @@ JSON only: {"object": "name", "category": "Cat", "instruction": "dispose"}"""
         if category not in CATEGORY_COLORS:
             category = "Unknown"
         
+        # Format items with clean names
+        items = data.get("items", [])
+        if isinstance(items, list):
+            for item in items:
+                if "name" in item:
+                    item["name"] = item["name"].replace("_", " ").title()
+        
         return {
             "success": True,
             "object": data.get("object", "Unknown item"),
             "category": category,
             "color": CATEGORY_COLORS[category],
-            "instruction": data.get("instruction", "Check local guidelines")
+            "instruction": data.get("instruction", "Check local guidelines"),
+            "items": items
         }
     except requests.exceptions.ConnectionError:
         return {"success": False, "error": "Ollama not running. Start with: ollama serve"}
