@@ -3,6 +3,7 @@ import json
 import requests
 import base64
 import cgi
+import os
 from io import BytesIO
 
 PORT = 8000
@@ -22,439 +23,6 @@ CATEGORY_COLORS = {
     "Sprays": "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
     "Unknown": "linear-gradient(135deg, #6b7280 0%, #1f2937 100%)"
 }
-
-HTML_PAGE = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrashCollector AI</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --primary: #16a34a;
-            --secondary: #22c55e;
-            --accent: #4ade80;
-        }
-        body {
-            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-            background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
-            min-height: 100vh;
-            padding: 20px;
-            transition: background 0.6s ease;
-            position: relative;
-            overflow-x: hidden;
-        }
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at 20% 50%, rgba(22, 163, 74, 0.15) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 80%, rgba(34, 197, 94, 0.15) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: -1;
-        }
-        .container {
-            max-width: 850px;
-            margin: 0 auto;
-            background: linear-gradient(135deg, rgba(5, 46, 22, 0.85) 0%, rgba(6, 78, 59, 0.9) 100%);
-            border-radius: 25px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1) inset;
-            overflow: hidden;
-            border: 1px solid rgba(74, 222, 128, 0.2);
-            backdrop-filter: blur(10px);
-        }
-        .header {
-            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
-            color: white;
-            padding: 50px 40px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        .header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            border-radius: 50%;
-        }
-        .header h1 { font-size: 42px; margin-bottom: 10px; font-weight: 800; letter-spacing: -1px; position: relative; z-index: 1; }
-        .header p { opacity: 0.95; font-size: 16px; font-weight: 300; position: relative; z-index: 1; }
-        .status-bar {
-            background: linear-gradient(90deg, rgba(22, 163, 74, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
-            padding: 20px 30px;
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 15px;
-            border-bottom: 1px solid rgba(74, 222, 128, 0.2);
-            font-size: 14px;
-        }
-        .status-item { display: flex; gap: 10px; align-items: center; }
-        .status-label { color: #86efac; font-weight: 500; }
-        .status-value { font-weight: 700; color: #dcfce7; }
-        .status-active { color: #10b981; font-weight: 800; }
-        .content { padding: 50px 40px; }
-        .upload-area {
-            border: 2px dashed #16a34a;
-            border-radius: 20px;
-            padding: 70px 40px;
-            text-align: center;
-            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
-            cursor: pointer;
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .upload-area:hover {
-            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%);
-            border-color: #22c55e;
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(22, 163, 74, 0.3);
-        }
-        .upload-icon { font-size: 70px; margin-bottom: 20px; display: block; }
-        .upload-text { font-size: 20px; color: #dcfce7; margin-bottom: 10px; font-weight: 600; }
-        .upload-hint { font-size: 14px; color: #86efac; }
-        #fileInput { display: none; }
-        .btn {
-            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
-            color: white;
-            border: none;
-            padding: 16px 50px;
-            font-size: 16px;
-            font-weight: 700;
-            border-radius: 50px;
-            cursor: pointer;
-            margin-top: 30px;
-            transition: all 0.3s;
-            box-shadow: 0 10px 30px rgba(22, 163, 74, 0.4);
-        }
-        .btn:hover:not(:disabled) { 
-            transform: translateY(-3px);
-            box-shadow: 0 15px 50px rgba(22, 163, 74, 0.6);
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .preview { margin-top: 40px; text-align: center; }
-        .preview img { max-width: 320px; max-height: 320px; border-radius: 20px; box-shadow: 0 20px 50px rgba(22, 163, 74, 0.4); }
-        .result {
-            margin-top: 40px;
-            padding: 40px;
-            background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
-            border-radius: 20px;
-            display: none;
-            border: 1px solid rgba(74, 222, 128, 0.3);
-        }
-        .result.show { display: block; animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        .result-header { font-size: 12px; color: #86efac; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; font-weight: 700; }
-        .result-object { font-size: 28px; font-weight: 800; color: #f0fdf4; margin-bottom: 25px; }
-        .result-category {
-            display: inline-block;
-            padding: 18px 40px;
-            border-radius: 50px;
-            color: white;
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s;
-        }
-        .result-category:hover { transform: scale(1.05); }
-        .result-instruction {
-            background: rgba(5, 46, 22, 0.95);
-            padding: 25px;
-            border-radius: 15px;
-            border-left: 5px solid #16a34a;
-            font-size: 16px;
-            color: #dcfce7;
-            line-height: 1.6;
-        }
-        .categories {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
-            gap: 15px;
-            margin-top: 40px;
-            padding-top: 40px;
-            border-top: 1px solid rgba(74, 222, 128, 0.2);
-        }
-        .category {
-            padding: 20px 15px;
-            border-radius: 15px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: 700;
-            color: white;
-            transition: all 0.3s;
-            cursor: default;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        .category:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4); }
-        .loading { display: none; text-align: center; padding: 50px 40px; }
-        .loading.show { display: block; }
-        .spinner {
-            width: 60px; height: 60px;
-            border: 4px solid rgba(22, 163, 74, 0.2);
-            border-top: 4px solid #16a34a;
-            border-right: 4px solid #22c55e;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading p { color: #dcfce7; font-weight: 600; }
-        .error { 
-            color: #fca5a5;
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
-            padding: 18px;
-            border-radius: 15px;
-            margin-top: 20px;
-            display: none;
-            border-left: 4px solid #ef4444;
-            font-weight: 600;
-        }
-        .error.show { display: block; animation: slideUp 0.4s; }
-        .detected-categories {
-            margin-top: 40px;
-            padding: 30px;
-            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
-            border-radius: 20px;
-            border: 1px solid rgba(74, 222, 128, 0.3);
-            display: none;
-        }
-        .detected-categories.show { display: block; animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .detected-title {
-            font-size: 18px;
-            font-weight: 800;
-            color: #dcfce7;
-            margin-bottom: 25px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .detected-items-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-            gap: 18px;
-        }
-        .detected-item {
-            background: rgba(5, 46, 22, 0.7);
-            border: 2px solid rgba(74, 222, 128, 0.3);
-            border-radius: 15px;
-            padding: 20px 15px;
-            text-align: center;
-            transition: all 0.3s;
-            cursor: default;
-            position: relative;
-            overflow: hidden;
-        }
-        .detected-item:hover {
-            border-color: rgba(74, 222, 128, 0.8);
-            background: rgba(5, 46, 22, 0.95);
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(22, 163, 74, 0.2);
-        }
-        .detected-item.found {
-            border: 2px solid #16a34a;
-            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%);
-            box-shadow: 0 0 20px rgba(22, 163, 74, 0.4);
-        }
-        .detected-item-name {
-            font-size: 13px;
-            color: #dcfce7;
-            margin-bottom: 12px;
-            font-weight: 600;
-            display: block;
-        }
-        .detected-item-count {
-            font-size: 20px;
-            font-weight: 800;
-            color: #16a34a;
-            background: rgba(22, 163, 74, 0.3);
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto;
-            border: 2px solid #16a34a;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>TrashCollector AI</h1>
-            <p>Smart Waste Segregation System</p>
-        </div>
-        
-        <div class="status-bar">
-            <div class="status-item">
-                <span class="status-label">Model:</span>
-                <span class="status-value">gemma3:4b-cloud</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Status:</span>
-                <span class="status-value status-active">Active</span>
-            </div>
-        </div>
-        
-        <div class="content">
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📷</div>
-                <div class="upload-text">Drop image here or click to upload</div>
-                <div class="upload-hint">Supports: JPG, PNG, WEBP (max 5MB)</div>
-                <input type="file" id="fileInput" accept="image/*">
-            </div>
-            
-            <div class="preview" id="preview"></div>
-            
-            <div style="text-align: center;">
-                <button class="btn" id="classifyBtn" disabled>Classify Waste</button>
-            </div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Analyzing image with AI...</p>
-            </div>
-            
-            <div class="error" id="error"></div>
-            
-            <div id="classifyContainer"></div>
-            
-            <div class="result" id="result">
-                <div class="result-header">Object Identified</div>
-                <div class="result-object" id="resultObject">-</div>
-                <div class="result-header">Waste Category</div>
-                <div class="result-category" id="resultCategory">-</div>
-                <div class="result-header">Disposal Instructions</div>
-                <div class="result-instruction" id="resultInstruction">-</div>
-            </div>
-            
-            <div class="detected-categories" id="detectedCategories">
-                <div class="detected-title">Detected Items</div>
-                <div class="detected-items-grid" id="detectedItemsGrid"></div>
-            </div>
-            
-            <div class="categories">
-                <div class="category" style="background: linear-gradient(135deg, #059669 0%, #047857 100%)">🟢 Wet</div>
-                <div class="category" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)">🔵 Dry</div>
-                <div class="category" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%)">🟡 Plastic</div>
-                <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #374151 100%)">⚪ Metal</div>
-                <div class="category" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)">🔷 Glass</div>
-                <div class="category" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)">🟣 E-Waste</div>
-                <div class="category" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%)">🔴 Hazard</div>
-                <div class="category" style="background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%)">🌱 Bio</div>
-                <div class="category" style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)">💨 Sprays</div>
-                <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #1f2937 100%)">⚫ Unknown</div>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        const categoryBgMap = {
-            "Wet": "linear-gradient(135deg, #059669 0%, #047857 100%)",
-            "Dry": "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
-            "Plastic": "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-            "Metal": "linear-gradient(135deg, #6b7280 0%, #374151 100%)",
-            "Glass": "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
-            "E-Waste": "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
-            "Hazardous": "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
-            "Biowaste": "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)",
-            "Sprays": "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
-            "Unknown": "linear-gradient(135deg, #6b7280 0%, #1f2937 100%)"
-        };
-
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const preview = document.getElementById('preview');
-        const classifyBtn = document.getElementById('classifyBtn');
-        const loading = document.getElementById('loading');
-        const error = document.getElementById('error');
-        const result = document.getElementById('result');
-        const detectedCategories = document.getElementById('detectedCategories');
-        const detectedItemsGrid = document.getElementById('detectedItemsGrid');
-        
-        let selectedFile = null;
-        
-        uploadArea.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
-        
-        function handleFile(file) {
-            if (!file.type.startsWith('image/')) { showError('Please select an image file'); return; }
-            if (file.size > 5 * 1024 * 1024) { showError('File size must be less than 5MB'); return; }
-            
-            selectedFile = file;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                preview.innerHTML = '<img src="' + e.target.result + '" alt="Preview">';
-                classifyBtn.disabled = false;
-                result.classList.remove('show');
-                error.classList.remove('show');
-            };
-            reader.readAsDataURL(file);
-        }
-        
-        classifyBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-            
-            loading.classList.add('show');
-            result.classList.remove('show');
-            detectedCategories.classList.remove('show');
-            error.classList.remove('show');
-            classifyBtn.disabled = true;
-            
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            
-            try {
-                const response = await fetch('/classify', { method: 'POST', body: formData });
-                const data = await response.json();
-                
-                if (data.success) {
-                    document.getElementById('resultObject').textContent = data.object;
-                    document.getElementById('resultCategory').textContent = data.category;
-                    document.getElementById('resultCategory').style.background = data.color;
-                    document.getElementById('resultInstruction').textContent = data.instruction;
-                    result.classList.add('show');
-                    
-                    // Display detected items
-                    if (data.items && data.items.length > 0) {
-                        detectedItemsGrid.innerHTML = '';
-                        data.items.forEach(item => {
-                            const itemDiv = document.createElement('div');
-                            itemDiv.className = 'detected-item' + (item.count > 0 ? ' found' : '');
-                            itemDiv.innerHTML = '<span class="detected-item-name">' + item.name + '</span><div class="detected-item-count">' + item.count + '</div>';
-                            detectedItemsGrid.appendChild(itemDiv);
-                        });
-                        detectedCategories.classList.add('show');
-                    }
-                    
-                    // Change background gradient based on category
-                    const bgGradient = categoryBgMap[data.category] || categoryBgMap["Unknown"];
-                    document.body.style.background = bgGradient;
-                } else {
-                    showError(data.error || 'Classification failed');
-                }
-            } catch (err) {
-                showError('Error: ' + err.message);
-            } finally {
-                loading.classList.remove('show');
-                classifyBtn.disabled = false;
-            }
-        });
-        
-        function showError(msg) {
-            error.textContent = msg;
-            error.classList.add('show');
-        }
-    </script>
-</body>
-</html>"""
 
 
 def resize_image(image_data, max_size=MAX_IMAGE_SIZE):
@@ -525,10 +93,36 @@ JSON only: {"object": "main item name", "category": "Category", "instruction": "
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path == "":
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
+            try:
+                # Get the directory where app.py is located
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                html_file = os.path.join(base_dir, 'index.html')
+                
+                # Read and serve the HTML file
+                with open(html_file, 'rb') as f:
+                    html_bytes = f.read()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(html_bytes)))
+                self.end_headers()
+                try:
+                    self.wfile.write(html_bytes)
+                except (ConnectionAbortedError, BrokenPipeError):
+                    pass  # Client disconnected, ignore
+            except FileNotFoundError:
+                self.send_response(500)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(b"<h1>500 Error</h1><p>index.html not found</p>")
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+        elif self.path == "/favicon.ico":
+            # Respond with 204 No Content for favicon (prevents 404 error)
+            self.send_response(204)
             self.end_headers()
-            self.wfile.write(HTML_PAGE.encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -549,21 +143,32 @@ class Handler(BaseHTTPRequestHandler):
                     image_base64 = base64.b64encode(image_data).decode("utf-8")
                     
                     result = classify_image(image_base64)
+                    response_json = json.dumps(result).encode()
                     
                     self.send_response(200)
                     self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", str(len(response_json)))
                     self.end_headers()
-                    self.wfile.write(json.dumps(result).encode())
+                    self.wfile.write(response_json)
                 else:
+                    error_response = json.dumps({"success": False, "error": "Invalid request"}).encode()
                     self.send_response(400)
                     self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", str(len(error_response)))
                     self.end_headers()
-                    self.wfile.write(json.dumps({"success": False, "error": "Invalid request"}).encode())
+                    self.wfile.write(error_response)
+            except (ConnectionAbortedError, BrokenPipeError):
+                pass  # Browser closed connection, ignore
             except Exception as e:
-                self.send_response(500)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+                try:
+                    error_response = json.dumps({"success": False, "error": str(e)}).encode()
+                    self.send_response(500)
+                    self.send_header("Content-type", "application/json")
+                    self.send_header("Content-Length", str(len(error_response)))
+                    self.end_headers()
+                    self.wfile.write(error_response)
+                except (ConnectionAbortedError, BrokenPipeError):
+                    pass
         else:
             self.send_response(404)
             self.end_headers()

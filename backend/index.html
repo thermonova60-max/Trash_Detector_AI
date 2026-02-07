@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrashCollector AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #16a34a;
+            --secondary: #22c55e;
+            --accent: #4ade80;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            overflow: hidden;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
+            height: 100vh;
+            gap: 0;
+        }
+        .left-panel { 
+            grid-column: 1; 
+            background: linear-gradient(135deg, #0f172a 0%, #1a2a3a 50%, #0f1e2e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 15px;
+            gap: 10px;
+            color: white;
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .left-panel::before {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(22, 163, 74, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+        }
+        .left-content { position: relative; z-index: 1; text-align: center; width: 100%; display: flex; flex-direction: column; gap: 8px; }
+        .logo-section { margin-bottom: 0px; }
+        .logo-icon { font-size: 35px; margin-bottom: 3px; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
+        .logo-title { font-size: 20px; font-weight: 800; margin-bottom: 3px; background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .logo-subtitle { font-size: 11px; color: rgba(76, 222, 128, 0.8); margin-bottom: 5px; }
+        .preview-section { 
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(34, 197, 94, 0.1) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(22, 163, 74, 0.5);
+            margin-bottom: 0px;
+            overflow: hidden;
+        }
+        .preview-section img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+        .preview-placeholder { font-size: 28px; opacity: 0.3; }
+        .right-panel { 
+            grid-column: 2; 
+            background: linear-gradient(135deg, #0f172a 0%, #1a2a3a 50%, #0d1f2a 100%);
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border-left: 2px solid rgba(22, 163, 74, 0.3);
+        }
+        .header { display: none; }
+        .panel { }
+        .upload-area {
+            border: 2px dashed #16a34a;
+            border-radius: 10px;
+            padding: 20px 15px;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.15) 0%, rgba(34, 197, 94, 0.15) 100%);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        .upload-area:hover {
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.25) 0%, rgba(34, 197, 94, 0.25) 100%);
+            border-color: #4ade80;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(22, 163, 74, 0.3);
+        }
+        .upload-icon { font-size: 55px; margin-bottom: 8px; display: block; }
+        .upload-text { font-size: 13px; color: #dcfce7; margin-bottom: 5px; font-weight: 600; }
+        .upload-hint { font-size: 11px; color: #86efac; }
+        #fileInput { display: none; }
+        .btn {
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+            color: white;
+            border: none;
+            padding: 9px 35px;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 15px rgba(22, 163, 74, 0.4);
+            width: 100%;
+        }
+        .btn:hover:not(:disabled) { 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(22, 163, 74, 0.6);
+            background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary {
+            background: linear-gradient(135deg, #1a2a3a 0%, #0f172a 100%);
+            border: 2px solid #16a34a;
+            flex: 1;
+            margin: 0;
+            padding: 8px 12px;
+            font-size: 11px;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #0f172a 0%, #1a2a3a 100%);
+            border-color: #4ade80;
+        }
+        .btn-secondary.active {
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+            border-color: #4ade80;
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            border: none;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: linear-gradient(135deg, #ef4444 0%, #fca5a5 100%);
+        }
+        .btn-capture {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            border: none;
+            flex: 1;
+        }
+        .btn-capture:hover:not(:disabled) {
+            background: linear-gradient(135deg, #a78bfa 0%, #c4b5fd 100%);
+        }
+        .camera-controls {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        .camera-area {
+            border: 2px solid #16a34a;
+            border-radius: 8px;
+            padding: 0;
+            text-align: center;
+            background: #000;
+            cursor: default;
+            transition: all 0.4s ease;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .button-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        .preview { 
+            text-align: center;
+            min-height: 150px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            width: 100%;
+        }
+        .preview img { max-width: 100%; max-height: 150px; border-radius: 10px; box-shadow: 0 10px 30px rgba(22, 163, 74, 0.4); }
+        .result {
+            padding: 0;
+            background: transparent;
+            border-radius: 0;
+            display: none;
+            border: none;
+        }
+        .result.show { display: block; animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .result-header { font-size: 11px; color: #4ade80; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700; }
+        .result-object { font-size: 22px; font-weight: 800; color: #dcfce7; margin-bottom: 15px; }
+        .result-category {
+            display: block;
+            padding: 12px 20px;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        .result-category:hover { transform: scale(1.03); }
+        .result-instruction {
+            background: linear-gradient(135deg, #0f172a 0%, #1a2a3a 100%);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid #16a34a;
+            font-size: 13px;
+            color: #86efac;
+            line-height: 1.5;
+        }
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .category {
+            padding: 12px 10px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            transition: all 0.3s;
+            cursor: default;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+        .category:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4); }
+        .loading { display: none; text-align: center; }
+        .loading.show { display: block; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 3px solid rgba(22, 163, 74, 0.2);
+            border-top: 3px solid #16a34a;
+            border-right: 3px solid #22c55e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading p { color: #86efac; font-weight: 600; font-size: 13px; }
+        .error { 
+            color: #fca5a5;
+            background: linear-gradient(135deg, #4c0519 0%, #3d041a 100%);
+            padding: 12px;
+            border-radius: 10px;
+            display: none;
+            border-left: 3px solid #ef4444;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .error.show { display: block; animation: slideUp 0.4s; }
+        .detected-categories {
+            padding: 0;
+            background: transparent;
+            border-radius: 0;
+            border: none;
+            display: none;
+            margin-bottom: 20px;
+        }
+        .detected-categories.show { display: block; animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .detected-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #dcfce7;
+            margin-bottom: 20px;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .detected-items-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .detected-item {
+            background: linear-gradient(135deg, #0f172a 0%, #1a2a3a 100%);
+            border: 2px solid #16a34a;
+            border-radius: 12px;
+            padding: 20px 15px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: default;
+            position: relative;
+            overflow: hidden;
+        }
+        .detected-item:hover {
+            border-color: #4ade80;
+            background: linear-gradient(135deg, #1a2a3a 0%, #0f172a 100%);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(22, 163, 74, 0.4);
+        }
+        .detected-item.found {
+            border: 2px solid #16a34a;
+            background: linear-gradient(135deg, #1a3f26 0%, #0f2819 100%);
+            box-shadow: 0 0 15px rgba(22, 163, 74, 0.4);
+        }
+        .detected-item-name {
+            font-size: 12px;
+            color: #86efac;
+            margin-bottom: 12px;
+            font-weight: 600;
+            display: block;
+        }
+        .detected-item-count {
+            font-size: 18px;
+            font-weight: 800;
+            color: white;
+            background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            border: 2px solid #4ade80;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="left-panel">
+            <div class="left-content">
+                <div class="logo-section">
+                    <div class="logo-icon">♻️🖥️</div>
+                    <div class="logo-title">E-Waste Detector</div>
+                    <div class="logo-subtitle">🚀 AI-Powered Scanner</div>
+                </div>
+                
+                <div class="preview-section" id="previewSection">
+                    <div class="preview-placeholder">📷</div>
+                </div>
+                
+                <canvas id="captureCanvas" style="display:none;"></canvas>
+                
+                <div class="button-group">
+                    <button class="btn btn-secondary" id="cameraToggleBtn">📷 Camera</button>
+                    <button class="btn btn-secondary" id="uploadToggleBtn">💾 Upload</button>
+                </div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">💾</div>
+                    <div class="upload-text">Click or Drag File</div>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+                
+                <div class="camera-area" id="cameraArea" style="display:none;">
+                </div>
+                
+                <div class="camera-controls" id="cameraControls" style="display:none;">
+                    <button class="btn btn-capture" id="captureBtn">📸 Capture</button>
+                    <button class="btn btn-danger" id="cameraStopBtn">⏹️ Stop Camera</button>
+                </div>
+                
+                <button class="btn" id="classifyBtn" disabled>🔍 Scan Now</button>
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>🔄 Scanning image...</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+            
+            <div class="detected-categories" id="detectedCategories">
+                <div class="detected-title">📊 Detected Categories</div>
+                <div class="detected-items-grid" id="detectedItemsGrid"></div>
+            </div>
+            
+            <div class="result" id="result">
+                <div class="result-header">✅ Object Identified</div>
+                <div class="result-object" id="resultObject">-</div>
+                <div class="result-header">📦 Waste Category</div>
+                <div class="result-category" id="resultCategory">-</div>
+                <div class="result-header">♻️ Disposal Instructions</div>
+                <div class="result-instruction" id="resultInstruction">-</div>
+                <div class="categories">
+                    <div class="category" style="background: linear-gradient(135deg, #059669 0%, #047857 100%)">🟢 Wet</div>
+                    <div class="category" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)">🔵 Dry</div>
+                    <div class="category" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%)">🟡 Plastic</div>
+                    <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #374151 100%)">⚪ Metal</div>
+                    <div class="category" style="background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)">🔷 Glass</div>
+                    <div class="category" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)">🟣 E-Waste</div>
+                    <div class="category" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%)">🔴 Hazard</div>
+                    <div class="category" style="background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%)">🌱 Bio</div>
+                    <div class="category" style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)">💨 Sprays</div>
+                    <div class="category" style="background: linear-gradient(135deg, #6b7280 0%, #1f2937 100%)">⚫ Unknown</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const itemNames = ['mobile', 'laptop', 'tablet', 'battery', 'charger', 'wire', 'circuit_board', 'motherboard', 'hard_disk', 'keyboard', 'mouse', 'monitor', 'cpu', 'power_supply', 'other'];
+        const itemEmojis = ['📱', '💻', '⌨️', '🔋', '🔌', '⚡', '🔧', '🖥️', '💾', '⌨️', '🖱️', '🖨️', '⚙️', '🔌', '📦'];
+        
+        let cumulativeCounts = {};
+        itemNames.forEach(name => cumulativeCounts[name] = 0);
+        
+        const categoryBgMap = {
+            "Wet": "linear-gradient(135deg, #059669 0%, #047857 100%)",
+            "Dry": "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+            "Plastic": "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+            "Metal": "linear-gradient(135deg, #6b7280 0%, #374151 100%)",
+            "Glass": "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
+            "E-Waste": "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+            "Hazardous": "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+            "Biowaste": "linear-gradient(135deg, #84cc16 0%, #65a30d 100%)",
+            "Sprays": "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+            "Unknown": "linear-gradient(135deg, #6b7280 0%, #1f2937 100%)"
+        };
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewSection = document.getElementById('previewSection');
+        const classifyBtn = document.getElementById('classifyBtn');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const result = document.getElementById('result');
+        const detectedCategories = document.getElementById('detectedCategories');
+        const detectedItemsGrid = document.getElementById('detectedItemsGrid');
+        const cameraToggleBtn = document.getElementById('cameraToggleBtn');
+        const uploadToggleBtn = document.getElementById('uploadToggleBtn');
+        const cameraArea = document.getElementById('cameraArea');
+        const cameraControls = document.getElementById('cameraControls');
+        const captureBtn = document.getElementById('captureBtn');
+        const cameraStopBtn = document.getElementById('cameraStopBtn');
+        const captureCanvas = document.getElementById('captureCanvas');
+        
+        let selectedFile = null;
+        let stream = null;
+        let cameraActive = false;
+        let cameraVideo = null;
+        
+        // Initialize detected items grid with zeros
+        function initializeDetectedItems() {
+            detectedItemsGrid.innerHTML = '';
+            itemNames.forEach((name, idx) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'detected-item' + (cumulativeCounts[name] > 0 ? ' found' : '');
+                itemDiv.id = 'item-' + name;
+                itemDiv.innerHTML = `<span class="detected-item-name">${itemEmojis[idx]} ${name.replace(/_/g, ' ').toUpperCase()}</span><div class="detected-item-count">${cumulativeCounts[name]}</div>`;
+                detectedItemsGrid.appendChild(itemDiv);
+            });
+        }
+        
+        // Show detected categories by default
+        detectedCategories.classList.add('show');
+        initializeDetectedItems();
+        
+        // Camera functionality
+        cameraToggleBtn.addEventListener('click', async () => {
+            if (cameraActive) return;
+            
+            uploadArea.style.display = 'none';
+            cameraArea.style.display = 'flex';
+            cameraControls.style.display = 'flex';
+            cameraToggleBtn.classList.add('active');
+            uploadToggleBtn.classList.remove('active');
+            
+            try {
+                // Create video element
+                if (!cameraVideo) {
+                    cameraVideo = document.createElement('video');
+                    cameraVideo.autoplay = true;
+                    cameraVideo.playsinline = true;
+                    cameraArea.appendChild(cameraVideo);
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                cameraVideo.srcObject = stream;
+                cameraActive = true;
+                console.log('✅ Camera started');
+            } catch (err) {
+                showError('❌ Camera error: ' + err.message);
+                cameraToggleBtn.classList.remove('active');
+                uploadArea.style.display = 'flex';
+                cameraArea.style.display = 'none';
+                cameraControls.style.display = 'none';
+            }
+        });
+        
+        captureBtn.addEventListener('click', () => {
+            if (cameraActive && cameraVideo) {
+                captureFromCamera();
+            }
+        });
+        
+        cameraStopBtn.addEventListener('click', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            cameraActive = false;
+            cameraControls.style.display = 'none';
+            cameraArea.style.display = 'none';
+            if (cameraVideo) {
+                cameraVideo.srcObject = null;
+                cameraVideo.remove();
+                cameraVideo = null;
+            }
+            uploadArea.style.display = 'flex';
+            cameraToggleBtn.classList.remove('active');
+            uploadToggleBtn.classList.add('active');
+            console.log('✅ Camera stopped');
+        });
+        
+        function captureFromCamera() {
+            if (!cameraActive || !cameraVideo) return;
+            
+            captureCanvas.width = cameraVideo.videoWidth;
+            captureCanvas.height = cameraVideo.videoHeight;
+            const ctx = captureCanvas.getContext('2d');
+            ctx.drawImage(cameraVideo, 0, 0);
+            
+            captureCanvas.toBlob(blob => {
+                if (blob && cameraActive) {
+                    selectedFile = blob;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        previewSection.innerHTML = '<img src="' + e.target.result + '" alt="Camera Preview">';
+                        classifyBtn.disabled = false;
+                        console.log('✅ Image captured and previewed');
+                    };
+                    reader.readAsDataURL(blob);
+                }
+            }, 'image/jpeg', 0.9);
+        }
+        
+        uploadToggleBtn.addEventListener('click', () => {
+            if (cameraActive) cameraStopBtn.click();
+            uploadArea.style.display = 'flex';
+            cameraArea.style.display = 'none';
+            uploadToggleBtn.classList.add('active');
+            cameraToggleBtn.classList.remove('active');
+        });
+        
+        uploadToggleBtn.classList.add('active');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+        
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) { showError('❌ Please select a valid image file'); return; }
+            if (file.size > 5 * 1024 * 1024) { showError('❌ File size must be less than 5MB'); return; }
+            
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewSection.innerHTML = '<img src="' + e.target.result + '" alt="Preview">';
+                classifyBtn.disabled = false;
+                result.classList.remove('show');
+                error.classList.remove('show');
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        classifyBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            loading.classList.add('show');
+            result.classList.remove('show');
+            error.classList.remove('show');
+            classifyBtn.disabled = true;
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('/classify', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('resultObject').textContent = data.object;
+                    document.getElementById('resultCategory').textContent = data.category;
+                    document.getElementById('resultCategory').style.background = data.color;
+                    document.getElementById('resultInstruction').textContent = data.instruction;
+                    result.classList.add('show');
+                    
+                    // Save to Firebase (async, non-blocking)
+                    setTimeout(() => {
+                        if (window.firebaseAuth) {
+                            const { ref, push, database, auth } = window.firebaseAuth;
+                            const userId = auth.currentUser?.uid;
+                            if (userId) {
+                                const scanData = {
+                                    timestamp: new Date().toISOString(),
+                                    object: data.object,
+                                    category: data.category,
+                                    instruction: data.instruction,
+                                    items: data.items || []
+                                };
+                                push(ref(database, `users/${userId}/scans`), scanData)
+                                    .catch(err => console.log('⚠️ Firebase save error:', err.message));
+                            }
+                        }
+                    }, 100);
+                    
+                    // Update cumulative detected items
+                    if (data.items && data.items.length > 0) {
+                        data.items.forEach(item => {
+                            const itemKey = item.name.toLowerCase().replace(/ /g, '_');
+                            if (item.count > 0) {
+                                cumulativeCounts[itemKey] = (cumulativeCounts[itemKey] || 0) + item.count;
+                            }
+                        });
+                        initializeDetectedItems();
+                    }
+                } else {
+                    showError('❌ ' + (data.error || 'Classification failed'));
+                }
+            } catch (err) {
+                showError('❌ Error: ' + err.message);
+            } finally {
+                loading.classList.remove('show');
+                classifyBtn.disabled = false;
+            }
+        });
+        
+        function showError(msg) {
+            error.textContent = msg;
+            error.classList.add('show');
+        }
+    </script>
+    
+    <!-- Lazy load Firebase after page is interactive -->
+    <script type="module">
+        // Firebase Authentication Integration
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+        import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzed5jISCqRtLMFsS-ogbuTZphqJZL5ug",
+            authDomain: "trash-ai-6ef18.firebaseapp.com",
+            projectId: "trash-ai-6ef18",
+            storageBucket: "trash-ai-6ef18.firebasestorage.app",
+            messagingSenderId: "912855820409",
+            appId: "1:912855820409:web:564441eacfa57af8574ca8",
+            measurementId: "G-7B9X5NNDQS",
+            databaseURL: "https://trash-ai-6ef18-default-rtdb.firebaseio.com"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const database = getDatabase(app);
+
+            signInAnonymously(auth)
+                .then(() => {
+                    window.firebaseAuth = { auth, database, ref, push };
+                    console.log('✅ Firebase ready');
+                })
+                .catch(err => console.log('⚠️ Firebase error:', err.message));
+        } catch (e) {
+            console.log('⚠️ Firebase init error:', e.message);
+        }
+    </script>
+</body>
+</html>
