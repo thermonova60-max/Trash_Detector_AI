@@ -571,8 +571,8 @@
             cameraArea.style.display = 'none';
             uploadToggleBtn.classList.add('active');
             cameraToggleBtn.classList.remove('active');
-        });
-        
+
+            
         uploadToggleBtn.classList.add('active');
         
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -615,24 +615,49 @@
                     document.getElementById('resultInstruction').textContent = data.instruction;
                     result.classList.add('show');
                     
-                    // Save to Firebase (async, non-blocking)
+                    // Save to Firebase (or fallback to Local Storage)
                     setTimeout(() => {
+                        const scanData = {
+                            timestamp: new Date().toISOString(),
+                            object: data.object,
+                            category: data.category,
+                            instruction: data.instruction,
+                            items: data.items || []
+                        };
+
+                        // Try Firebase first
                         if (window.firebaseAuth) {
-                            const { ref, push, database, auth } = window.firebaseAuth;
-                            const userId = auth.currentUser?.uid;
-                            if (userId) {
-                                const scanData = {
-                                    timestamp: new Date().toISOString(),
-                                    object: data.object,
-                                    category: data.category,
-                                    instruction: data.instruction,
-                                    items: data.items || []
-                                };
-                                push(ref(database, `users/${userId}/scans`), scanData)
-                                    .catch(err => console.log('⚠️ Firebase save error:', err.message));
+                            try {
+                                const { ref, push, database, auth } = window.firebaseAuth;
+                                const userId = auth.currentUser?.uid;
+                                if (userId) {
+                                    push(ref(database, `users/${userId}/scans`), scanData)
+                                        .then(() => {
+                                            console.log('✅ Scan saved to Firebase RTDB');
+                                        })
+                                        .catch((err) => {
+                                            console.warn('⚠️ Firebase save failed, using localStorage:', err.code);
+                                            saveScanToLocalStorage(scanData);
+                                        });
+                                } else {
+                                    saveScanToLocalStorage(scanData);
+                                }
+                            } catch (err) {
+                                console.warn('⚠️ Firebase error, using localStorage:', err.message);
+                                saveScanToLocalStorage(scanData);
                             }
+                        } else {
+                            saveScanToLocalStorage(scanData);
                         }
                     }, 100);
+                    
+                    function saveScanToLocalStorage(scanData) {
+                        const scansKey = 'trash_detector_scans';
+                        const existingScans = JSON.parse(localStorage.getItem(scansKey) || '[]');
+                        existingScans.push(scanData);
+                        localStorage.setItem(scansKey, JSON.stringify(existingScans));
+                        console.log('✅ Scan saved to Local Storage (backup)');
+                    }
                     
                     // Update cumulative detected items
                     if (data.items && data.items.length > 0) {
@@ -661,37 +686,67 @@
         }
     </script>
     
-    <!-- Lazy load Firebase after page is interactive -->
+    <!-- Firebase CDN Integration -->
     <script type="module">
-        // Firebase Authentication Integration
+        // Import Firebase modules from CDN
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
         import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js";
 
+        // Firebase configuration for trashai-1 project
         const firebaseConfig = {
-            apiKey: "AIzaSyAzed5jISCqRtLMFsS-ogbuTZphqJZL5ug",
-            authDomain: "trash-ai-6ef18.firebaseapp.com",
-            projectId: "trash-ai-6ef18",
-            storageBucket: "trash-ai-6ef18.firebasestorage.app",
-            messagingSenderId: "912855820409",
-            appId: "1:912855820409:web:564441eacfa57af8574ca8",
-            measurementId: "G-7B9X5NNDQS",
-            databaseURL: "https://trash-ai-6ef18-default-rtdb.firebaseio.com"
+            apiKey: "AIzaSyB4V3XQUjvpAaRM9HEWOOQRzipMC39rbNE",
+            authDomain: "trashai-1.firebaseapp.com",
+            projectId: "trashai-1",
+            storageBucket: "trashai-1.firebasestorage.app",
+            messagingSenderId: "266435984573",
+            appId: "1:266435984573:web:18dbfa7e26eebc7ba1cbd4"
         };
 
+        console.log('🔄 Initializing Firebase (trashai-1 project, SDK v12.9.0)...');
+
         try {
+            // Initialize Firebase
             const app = initializeApp(firebaseConfig);
+            console.log('✅ Firebase initialized with trashai-1 project');
+
+            // Get Auth and Database instances
             const auth = getAuth(app);
             const database = getDatabase(app);
+            
+            console.log('✅ Auth & Database instances created');
 
+            // Sign in anonymously
             signInAnonymously(auth)
-                .then(() => {
+                .then((userCredential) => {
+                    const userId = userCredential.user.uid;
+                    console.log('✅ Anonymous authentication successful');
+                    console.log('📍 User ID:', userId);
+                    
+                    // Store in window for use in main script
                     window.firebaseAuth = { auth, database, ref, push };
-                    console.log('✅ Firebase ready');
+                    console.log('✅ Firebase ready! Scans will be saved to RTDB');
+                    
+                    // Test database connection
+                    const testRef = ref(database, `users/${userId}/test`);
+                    push(testRef, { timestamp: new Date().toISOString() })
+                        .then(() => {
+                            console.log('✅ Database connection verified - writes working!');
+                        })
+                        .catch((err) => {
+                            console.error('❌ Database write failed:', err.code);
+                            if (err.code === 'PERMISSION_DENIED') {
+                                console.error('⚠️ Fix: Update Firebase RTDB Rules to allow writes');
+                            }
+                        });
                 })
-                .catch(err => console.log('⚠️ Firebase error:', err.message));
-        } catch (e) {
-            console.log('⚠️ Firebase init error:', e.message);
+                .catch((err) => {
+                    console.error('❌ Auth failed:', err.code, err.message);
+                    console.log('💡 Make sure Anonymous Auth is ENABLED in Firebase Console');
+                });
+
+        } catch (error) {
+            console.error('❌ Firebase init error:', error);
         }
     </script>
 </body>
